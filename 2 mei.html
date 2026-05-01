@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Papan Aspirasi Siswa - SMKN 2 Gerung</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Indie+Flower&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js" type="module"></script>
+
+    <style>
+        :root { --board-bg: #2c3e50; }
+        body { font-family: 'Poppins', sans-serif; background-color: #f3f4f6; touch-action: manipulation; overflow-x: hidden; }
+        .header-container { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+        .chalkboard {
+            background: var(--board-bg);
+            background-image: radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(to bottom, #2c3e50, #000000);
+            background-size: 20px 20px, 100% 100%;
+            min-height: 80vh;
+            position: relative;
+            border: 12px solid #5d4037;
+            border-radius: 8px;
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.5), 0 20px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .chalk-text { font-family: 'Permanent Marker', cursive; color: rgba(255, 255, 255, 0.8); text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        .school-identity { display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: white; padding: 8px 16px; border-radius: 50px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .school-logo { max-width: 50px; height: auto; }
+        .school-name-text { font-weight: 700; color: #1e40af; font-size: 1rem; line-height: 1.2; }
+        .post-it {
+            width: 160px; min-height: 160px; padding: 15px; position: absolute; cursor: move;
+            box-shadow: 5px 5px 7px rgba(0,0,0,0.4); transition: transform 0.2s ease;
+            display: flex; flex-direction: column; justify-content: space-between;
+            font-family: 'Indie Flower', cursive; font-size: 1.1rem; word-wrap: break-word;
+            border-bottom-right-radius: 40px 5px; user-select: none; z-index: 10;
+        }
+        .post-it-yellow { background: #ffff88; color: #333; }
+        .post-it-pink { background: #ff7eb9; color: #fff; }
+        .post-it-blue { background: #7afcff; color: #333; }
+        .post-it-green { background: #98ff98; color: #333; }
+        .controls { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-capture { background: #e67e22; color: white; transition: background 0.3s; }
+        .author { font-size: 0.7rem; margin-top: 10px; font-weight: bold; text-align: right; border-top: 1px dashed rgba(0,0,0,0.1); padding-top: 5px; }
+        #empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+        @media (max-width: 768px) {
+            .header-container { flex-direction: column; align-items: flex-start; gap: 15px; }
+            .school-identity { align-self: flex-end; }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <header class="max-w-6xl mx-auto mb-8">
+        <div class="header-container">
+            <div class="text-left flex-1">
+                <h1 class="text-2xl md:text-4xl font-bold text-slate-800 mb-1">Selamat Hari Pendidikan Nasional! </h1>
+                <p class="text-slate-600 text-sm md:text-base">Suarakan harapanmu di mading digital <strong>SMKN 2 Gerung</strong>. Aspirasi ini muncul real-time di semua layar!</p>
+            </div>
+            <div class="school-identity">
+                <span class="school-name-text">SMKN 2<br>Gerung</span>
+                <img id="schoolLogoImg" src="https://smkn2gerung.sch.id/images/0/24694816/cropped-SMKN_2_GERUNG-removebg-preview-pdVBek1OipaMi3fw7laoxA.png" alt="Logo Sekolah" class="school-logo">
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto">
+        <div id="capture-area" class="chalkboard relative">
+            <div class="p-6 text-center"><h2 class="chalk-text text-2xl md:text-3xl opacity-50">#AspirasiSiswa2026</h2></div>
+            <div id="empty-state" class="chalk-text opacity-30 text-xl md:text-2xl">Menghubungkan ke mading...</div>
+            <div id="notes-container" class="w-full h-full"></div>
+        </div>
+
+        <div class="controls max-w-2xl mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Nama / Inisial</label>
+                    <input type="text" id="nameInput" placeholder="Contoh: Budi - XI TKJ" class="w-full p-2 border rounded-lg outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Warna</label>
+                    <div class="flex gap-2">
+                        <button onclick="window.selectColor('yellow')" class="w-8 h-8 rounded-full bg-[#ffff88] border-2 border-gray-300" id="btn-yellow"></button>
+                        <button onclick="window.selectColor('pink')" class="w-8 h-8 rounded-full bg-[#ff7eb9] border-2 border-gray-300" id="btn-pink"></button>
+                        <button onclick="window.selectColor('blue')" class="w-8 h-8 rounded-full bg-[#7afcff] border-2 border-gray-300" id="btn-blue"></button>
+                        <button onclick="window.selectColor('green')" class="w-8 h-8 rounded-full bg-[#98ff98] border-2 border-gray-300" id="btn-green"></button>
+                    </div>
+                </div>
+            </div>
+            <label class="block text-sm font-semibold text-gray-700 mb-1">Harapanmu</label>
+            <textarea id="wishInput" rows="2" placeholder="Tulis aspirasimu..." class="w-full p-3 border rounded-lg outline-none mb-4"></textarea>
+            
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button id="addBtn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2">
+                    <span>📌 Tempel Sekarang</span>
+                </button>
+                <button id="captureBtn" class="btn-capture px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2">
+                    <span>📸 Simpan Mading</span>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'mading-gerung';
+
+        let selectedColor = 'yellow';
+        let currentUser = null;
+
+        // Mendefinisikan selectColor ke window agar bisa diakses elemen HTML onclick
+        window.selectColor = (color) => {
+            selectedColor = color;
+            document.querySelectorAll('[id^="btn-"]').forEach(btn => {
+                btn.classList.remove('ring-2', 'ring-blue-500', 'scale-110');
+            });
+            const selectedBtn = document.getElementById(`btn-${color}`);
+            if (selectedBtn) {
+                selectedBtn.classList.add('ring-2', 'ring-blue-500', 'scale-110');
+            }
+        };
+
+        // Auth Logic
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user) {
+                listenToNotes();
+            }
+        });
+
+        initAuth();
+
+        const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'notes');
+
+        document.getElementById('addBtn').onclick = async () => {
+            const name = document.getElementById('nameInput').value.trim() || "Anonim";
+            const text = document.getElementById('wishInput').value.trim();
+            if (!text || !currentUser) {
+                if(!text) alert("Silakan tulis harapanmu!");
+                return;
+            }
+
+            const board = document.getElementById('capture-area');
+            const x = Math.random() * (board.clientWidth - 170);
+            const y = Math.random() * (board.clientHeight - 170);
+            const rotation = (Math.random() * 10) - 5;
+
+            try {
+                await addDoc(colRef, {
+                    name, text, color: selectedColor, x, y, rotation, createdAt: Date.now()
+                });
+                document.getElementById('wishInput').value = "";
+            } catch (e) { console.error(e); }
+        };
+
+        function listenToNotes() {
+            onSnapshot(colRef, (snapshot) => {
+                const container = document.getElementById('notes-container');
+                const emptyState = document.getElementById('empty-state');
+                container.innerHTML = "";
+                
+                if (snapshot.empty) {
+                    emptyState.innerText = "Belum ada aspirasi. Jadilah yang pertama!";
+                    emptyState.style.display = 'block';
+                    return;
+                }
+                
+                emptyState.style.display = 'none';
+                snapshot.forEach((docSnap) => {
+                    const note = docSnap.data();
+                    const id = docSnap.id;
+                    const div = document.createElement('div');
+                    div.className = `post-it post-it-${note.color}`;
+                    div.style.left = `${note.x}px`;
+                    div.style.top = `${note.y}px`;
+                    div.style.transform = `rotate(${note.rotation}deg)`;
+                    div.innerHTML = `<div class="content">${note.text}</div><div class="author">${note.name}</div>`;
+                    
+                    makeDraggable(div, id);
+                    container.appendChild(div);
+                });
+            }, (err) => {
+                console.error("Firestore error:", err);
+                const emptyState = document.getElementById('empty-state');
+                emptyState.innerText = "Gagal memuat data. Periksa koneksi atau izin Firestore.";
+            });
+        }
+
+        function makeDraggable(el, docId) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            el.onmousedown = dragStart; el.ontouchstart = dragStart;
+
+            function dragStart(e) {
+                const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+                pos3 = clientX; pos4 = clientY;
+                if(e.type === 'touchstart') {
+                    document.ontouchend = dragEnd; document.ontouchmove = dragMove;
+                } else {
+                    document.onmouseup = dragEnd; document.onmousemove = dragMove;
+                }
+            }
+
+            function dragMove(e) {
+                const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+                pos1 = pos3 - clientX; pos2 = pos4 - clientY;
+                pos3 = clientX; pos4 = clientY;
+                
+                let newTop = el.offsetTop - pos2;
+                let newLeft = el.offsetLeft - pos1;
+                
+                const board = document.getElementById('capture-area');
+                if (newTop >= 0 && newTop <= board.clientHeight - el.offsetHeight) el.style.top = newTop + "px";
+                if (newLeft >= 0 && newLeft <= board.clientWidth - el.offsetWidth) el.style.left = newLeft + "px";
+            }
+
+            async function dragEnd() {
+                document.onmouseup = null; document.onmousemove = null;
+                document.ontouchend = null; document.ontouchmove = null;
+                try {
+                    const noteRef = doc(db, 'artifacts', appId, 'public', 'data', 'notes', docId);
+                    await updateDoc(noteRef, { x: parseInt(el.style.left), y: parseInt(el.style.top) });
+                } catch (e) { console.error("Update error:", e); }
+            }
+        }
+
+        document.getElementById('captureBtn').onclick = async () => {
+            const btn = document.getElementById('captureBtn');
+            btn.disabled = true;
+            btn.innerText = "📸 Memproses...";
+            try {
+                const canvas = await html2canvas(document.getElementById('capture-area'), { useCORS: true, scale: 2 });
+                const link = document.createElement('a');
+                link.download = 'Mading-SMKN2Gerung.png';
+                link.href = canvas.toDataURL();
+                link.click();
+            } catch (err) { console.error(err); }
+            btn.disabled = false;
+            btn.innerText = "📸 Simpan Mading";
+        };
+
+        // Inisialisasi warna default
+        window.selectColor('yellow');
+    </script>
+</body>
+</html>
